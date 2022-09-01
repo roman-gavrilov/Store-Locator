@@ -8,6 +8,31 @@ import "dotenv/config";
 import applyAuthMiddleware from "./middleware/auth.js";
 import verifyRequest from "./middleware/verify-request.js";
 
+import mongoose from "mongoose";
+import cors from "cors";
+
+const Schema = mongoose.Schema;
+mongoose.connect('mongodb+srv://roman:hOBYs65IMT3y1wHB@cluster0.jpnx9dr.mongodb.net/store-locator',{
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
+
+const locations = mongoose.model('locations', Schema({
+  name: {type: String},
+  email: {type: String},
+  phone: {type: String},
+  address1: {type: String},
+  address2: {type: String},
+  city: {type: String},
+  zip: {type: String},
+  state: {type: String},
+  country: {type: String},
+  website: {type: String},
+  logo_url: {type: String},
+  lat: {type: String},
+  lng: {type: String}
+}));
+
 const USE_ONLINE_TOKENS = true;
 const TOP_LEVEL_OAUTH_COOKIE = "shopify_top_level_oauth";
 
@@ -84,7 +109,68 @@ export async function createServer(
     }
   });
 
-  app.use(express.json());
+  app.use(express.json({limit: '50mb'}));
+  app.use(cors());
+
+  app.get("/api/locations-data" , async(req, res) => {
+    let body = [];
+    locations.find({}, function(err, data){
+      res.status(200).send(data);
+    }); 
+  });
+
+  app.get("/api/locations-full" , async(req, res) => {
+    locations.find({}, function(err, data){
+      res.status(200).send(data);
+    });
+  });
+
+  app.get("/api/locations" , async(req, res) => {
+    let body = [];
+    locations.find({}, function(err, data){
+      data.forEach((location) => {
+        const {name, address1, address2, city, zip, state, country, phone, website, email, logo_url, lat, lng} = location;
+        body.push([name, email,`${address1}, ${city} ${zip}, ${state} ${country}`, phone, website, logo_url, {position: {lat: lat, lng: lng}}]);
+      })
+      res.status(200).send(body);
+    });
+  });
+
+
+  app.get("/api/locations/:id" , async(req, res) => {
+    let limit_pagination = 20;
+    let pagination_id = req.params.id;
+    let body = [];
+    locations.find({}, function(err, data){
+      data.forEach((location) => {
+        const {name, address1, address2, city, zip, state, country, phone, website, email, logo_url, lat, lng} = location;
+        body.push([name, email,`${address1}, ${city} ${zip}, ${state} ${country}`, phone, website, logo_url, {position: {lat: lat, lng: lng}}]);
+      })
+      const new_body = body.slice(pagination_id-1, pagination_id * limit_pagination);
+      res.status(200).send(new_body);
+    });
+  });
+
+  app.post("/api/bulk-location-save", async(req, res) => {
+    // locations.collection.drop();
+    console.log(req.body);
+    locations.collection.insertMany(req.body);
+
+    res.status(200).send('success');
+
+  });
+
+  app.post("/api/location-save", async(req, res) => {
+    let data = [{
+      ...req.body.address,
+      ...req.body.position
+    }]
+    // locations.collection.drop();
+    locations.collection.insertMany(data);
+
+    res.status(200).send('success');
+
+  });
 
   app.use((req, res, next) => {
     const shop = req.query.shop;
